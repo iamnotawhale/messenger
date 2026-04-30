@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messenger_app/src/bridge/messenger_bridge.dart';
-import 'package:messenger_app/src/models/contact.dart';
 import 'package:messenger_app/src/models/chat_message.dart';
+import 'package:messenger_app/src/models/contact.dart';
 import 'package:messenger_app/src/state/messenger_controller.dart';
 
 class FakeBridge implements MessengerBridge {
@@ -22,10 +22,10 @@ class FakeBridge implements MessengerBridge {
 
   @override
   Future<void> addContact(
-    ClientConfig config,
-    String name,
-    String publicIdentityJson,
-  ) async {
+    ClientConfig config, {
+    required String name,
+    required String publicIdentityJson,
+  }) async {
     contacts.add(Contact(name: name, peerId: 'peer:bob'));
   }
 
@@ -34,10 +34,10 @@ class FakeBridge implements MessengerBridge {
 
   @override
   Future<String> sendMessage(
-    ClientConfig config,
-    String contactName,
-    String body,
-  ) async {
+    ClientConfig config, {
+    required String contactName,
+    required String body,
+  }) async {
     messages.add(ChatMessage(
       messageId: 'message:1',
       contactName: contactName,
@@ -49,13 +49,13 @@ class FakeBridge implements MessengerBridge {
   }
 
   @override
-  Future<List<SyncedMessage>> sync(ClientConfig config) async => const [];
+  Future<List<ChatMessage>> sync(ClientConfig config) async => const [];
 
   @override
   Future<List<ChatMessage>> listMessages(
-    ClientConfig config,
-    String contactName,
-  ) async =>
+    ClientConfig config, {
+    required String contactName,
+  }) async =>
       messages;
 }
 
@@ -71,8 +71,9 @@ void main() {
     );
 
     await controller.initialize();
-    await controller.addContact('Bob', '{}');
-    await controller.sendMessage('Bob', 'hello');
+    await controller.addContact(name: 'Bob', publicIdentityJson: '{}');
+    await controller.selectContact('Bob');
+    await controller.sendMessage('hello');
 
     expect(controller.peerId, 'peer:test');
     expect(controller.contacts.single.name, 'Bob');

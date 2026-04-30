@@ -64,6 +64,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p messenger-server
 ```
 
+GitHub Actions runs the Rust checks, the relay smoke test, and a Flutter job
+that generates `flutter_rust_bridge` bindings before running `flutter analyze`
+and `flutter test`.
+
 By default the relay queue is in memory. Set `MESSENGER_SQLITE_PATH` to persist
 encrypted relay envelopes across restarts:
 
