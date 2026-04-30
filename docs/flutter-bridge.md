@@ -50,7 +50,10 @@ image does not include Flutter/Dart tooling.
 When the Flutter SDK and `flutter_rust_bridge` are available:
 
 1. Install the generator: `cargo install flutter_rust_bridge_codegen`.
-2. From the repository root, run `flutter_rust_bridge_codegen generate`.
+2. From the repository root, run `scripts/generate-flutter-bridge.sh`.
 3. Run `flutter pub get`, `flutter analyze`, and `flutter test` in
    `apps/flutter`.
 4. Replace the mock bridge in `main.dart` with `RustMessengerBridge`.
+
+The generation script checks for `flutter`, `dart`, and
+`flutter_rust_bridge_codegen` before running codegen.
