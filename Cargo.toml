@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/messenger-client-store",
+members = [ "crates/messenger-client", "crates/messenger-client-store",
     "crates/messenger-core",
     "crates/messenger-crypto",
     "crates/messenger-protocol",
