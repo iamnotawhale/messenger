@@ -58,7 +58,9 @@ messenger-ffi facade
 ## Development
 
 ```bash
+cargo fmt --all --check
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p messenger-server
 ```
 
@@ -132,6 +134,13 @@ queue is empty after delivery:
 
 ```bash
 scripts/dev-relay-smoke.sh
+```
+
+Generate Flutter/Rust bridge bindings in an environment with Flutter, Dart, and
+`flutter_rust_bridge_codegen` installed:
+
+```bash
+scripts/generate-flutter-bridge.sh
 ```
 
 ## Security direction
