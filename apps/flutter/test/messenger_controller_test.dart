@@ -1,67 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:messenger_app/src/bridge/messenger_bridge.dart';
-import 'package:messenger_app/src/models/chat_message.dart';
-import 'package:messenger_app/src/models/contact.dart';
+import 'package:messenger_app/src/bridge/mock_messenger_bridge.dart';
 import 'package:messenger_app/src/state/messenger_controller.dart';
-
-class FakeBridge implements MessengerBridge {
-  var initialized = false;
-  final contacts = <Contact>[];
-  final messages = <ChatMessage>[];
-
-  @override
-  Future<String> initClient(ClientConfig config) async {
-    initialized = true;
-    return 'peer:test';
-  }
-
-  @override
-  Future<String> exportPublicIdentity(ClientConfig config) async {
-    return '{"peer_id":"peer:test"}';
-  }
-
-  @override
-  Future<void> addContact(
-    ClientConfig config, {
-    required String name,
-    required String publicIdentityJson,
-  }) async {
-    contacts.add(Contact(name: name, peerId: 'peer:bob'));
-  }
-
-  @override
-  Future<List<Contact>> listContacts(ClientConfig config) async => contacts;
-
-  @override
-  Future<String> sendMessage(
-    ClientConfig config, {
-    required String contactName,
-    required String body,
-  }) async {
-    messages.add(ChatMessage(
-      messageId: 'message:1',
-      contactName: contactName,
-      direction: MessageDirection.outbound,
-      body: body,
-      createdAtMs: 1,
-    ));
-    return 'message:1';
-  }
-
-  @override
-  Future<List<ChatMessage>> sync(ClientConfig config) async => const [];
-
-  @override
-  Future<List<ChatMessage>> listMessages(
-    ClientConfig config, {
-    required String contactName,
-  }) async =>
-      messages;
-}
 
 void main() {
   test('controller initializes and sends messages', () async {
-    final bridge = FakeBridge();
+    final bridge = MockMessengerBridge();
     final controller = MessengerController(
       bridge: bridge,
       config: const ClientConfig(
@@ -71,11 +15,11 @@ void main() {
     );
 
     await controller.initialize();
-    await controller.addContact(name: 'Bob', publicIdentityJson: '{}');
+    await controller.addContact(name: 'Bob', publicIdentityJson: '{"peer_id":"peer:bob"}');
     await controller.selectContact('Bob');
     await controller.sendMessage('hello');
 
-    expect(controller.peerId, 'peer:test');
+    expect(controller.peerId, 'peer:local-demo');
     expect(controller.contacts.single.name, 'Bob');
     expect(controller.messages.single.body, 'hello');
   });

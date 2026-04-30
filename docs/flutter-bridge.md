@@ -26,7 +26,10 @@ URL, and delegates to `messenger-client`.
 `apps/flutter` contains a minimal app shell:
 
 - `MessengerBridge` defines the Dart-side bridge contract.
-- `MockMessengerBridge` lets the UI run before generated bindings exist.
+- `MockMessengerBridge` is the default app bridge so the UI can run before
+  generated native bindings exist.
+- `RustMessengerBridge` adapts generated `flutter_rust_bridge` calls to
+  `MessengerBridge` once codegen is available.
 - `MessengerController` owns UI state and calls bridge methods.
 - `HomeScreen` provides onboarding, public identity export, contact add, send,
   sync, and message list flows.

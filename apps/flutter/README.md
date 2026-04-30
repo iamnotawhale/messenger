@@ -18,6 +18,7 @@ lib/
   src/
     bridge/
       messenger_bridge.dart
+      mock_messenger_bridge.dart
       rust_messenger_bridge.dart
       generated/
     models/
@@ -25,6 +26,8 @@ lib/
     state/
 ```
 
-`MessengerBridge` is the app-facing interface. `RustMessengerBridge` is prepared
-to call generated `flutter_rust_bridge` bindings once `flutter_rust_bridge.yaml`
-is generated in an environment with Flutter/Dart installed.
+`MessengerBridge` is the app-facing interface. `MockMessengerBridge` is the
+default app bridge so the shell can run as a demo before native bindings are
+available. `RustMessengerBridge` is prepared to call generated
+`flutter_rust_bridge` bindings once `flutter_rust_bridge.yaml` is generated in
+an environment with Flutter/Dart installed.
