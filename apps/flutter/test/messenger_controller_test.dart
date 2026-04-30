@@ -19,7 +19,7 @@ void main() {
     await controller.selectContact('Bob');
     await controller.sendMessage('hello');
 
-    expect(controller.peerId, 'peer:mock-local');
+    expect(controller.peerId, 'peer:local-demo');
     expect(controller.contacts.single.name, 'Bob');
     expect(controller.messages.single.body, 'hello');
   });
