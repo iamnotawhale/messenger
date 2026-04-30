@@ -1,0 +1,10 @@
+[package]
+name = "messenger-protocol"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blake3 = "=1.5.5"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+uuid = { version = "=1.10.0", features = ["serde", "v4"] }

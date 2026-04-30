@@ -1,0 +1,11 @@
+[package]
+name = "messenger-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8.9"
+messenger-protocol = { version = "0.1.0", path = "../../crates/messenger-protocol" }
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = "0.3.23"

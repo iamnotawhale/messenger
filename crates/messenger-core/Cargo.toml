@@ -1,0 +1,10 @@
+[package]
+name = "messenger-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+messenger-crypto = { version = "0.1.0", path = "../messenger-crypto" }
+messenger-protocol = { version = "0.1.0", path = "../messenger-protocol" }
+messenger-storage = { version = "0.1.0", path = "../messenger-storage" }
+thiserror = "2.0.18"

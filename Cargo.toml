@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "crates/messenger-core",
+    "crates/messenger-crypto",
+    "crates/messenger-protocol",
+    "crates/messenger-storage",
+    "server/messenger-server",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/messenger"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
