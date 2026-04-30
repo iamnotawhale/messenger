@@ -547,6 +547,7 @@ version = "0.1.0"
 dependencies = [
  "messenger-crypto",
  "messenger-protocol",
+ "messenger-transport",
  "serde",
  "serde_json",
  "thiserror",
@@ -587,6 +588,17 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "messenger-protocol",
+ "thiserror",
+]
+
+[[package]]
+name = "messenger-transport"
+version = "0.1.0"
+dependencies = [
+ "messenger-crypto",
+ "messenger-protocol",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 
