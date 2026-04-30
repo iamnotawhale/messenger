@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'bridge/messenger_bridge.dart';
+import 'bridge/mock_messenger_bridge.dart';
 import 'screens/home_screen.dart';
 import 'state/messenger_controller.dart';
 
 class MessengerApp extends StatelessWidget {
-  const MessengerApp({super.key, this.bridge = const UnimplementedMessengerBridge()});
+  MessengerApp({super.key, MessengerBridge? bridge})
+      : bridge = bridge ?? MockMessengerBridge();
 
   final MessengerBridge bridge;
 
