@@ -18,14 +18,19 @@ development environment.
 
 ```text
 apps/
-  flutter/                Flutter client integration notes and future app
+  flutter/                Flutter app shell and bridge-facing UI
 crates/
+  messenger-client/       Client service layer
+  messenger-client-store/ SQLite-backed local client store
   messenger-core/         Application orchestration layer
   messenger-crypto/       Identity keys, encryption, signatures
+  messenger-ffi/          Flutter bridge facade DTOs and functions
   messenger-protocol/     Wire/domain protocol types
   messenger-storage/      Storage interfaces
+  messenger-transport/    Relay HTTP client
 docs/
   architecture.md         Current architecture notes
+  flutter-bridge.md       Flutter bridge facade and app workflow
 server/
   messenger-server/       Relay/signaling server skeleton
 ```
@@ -41,7 +46,7 @@ Flutter UI
   |
 flutter_rust_bridge
   |
-Rust core
+messenger-ffi facade
   |-- protocol envelopes
   |-- identity and crypto
   |-- local storage
