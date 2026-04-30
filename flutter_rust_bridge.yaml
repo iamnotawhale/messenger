@@ -1,6 +1,6 @@
 rust_input: crates/messenger-ffi/src/api.rs
 dart_output: apps/flutter/lib/src/bridge/generated/api.dart
-c_output: apps/flutter/ios/Runner/bridge_generated.h
-rust_crate_dir: crates/messenger-ffi
+c_output: apps/flutter/rust/generated/frb_generated.h
+rust_root: crates/messenger-ffi
 dart_format_line_length: 100
 web: false
