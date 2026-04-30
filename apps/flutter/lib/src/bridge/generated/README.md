@@ -7,6 +7,7 @@ Expected files after running codegen:
 - any platform-specific loader files required by the selected generator version
 
 `api.dart` is currently a placeholder so Flutter analyze/test can run before
-codegen. `flutter_rust_bridge_codegen generate` is expected to overwrite it.
+codegen. `scripts/generate-flutter-bridge.sh` removes the placeholder before
+running `flutter_rust_bridge_codegen generate`.
 
 Do not hand-edit generated Dart files beyond placeholder maintenance.

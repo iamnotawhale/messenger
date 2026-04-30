@@ -24,6 +24,9 @@ cd "$FLUTTER_DIR"
 flutter pub get
 
 cd "$ROOT_DIR"
+rm -f "$ROOT_DIR/apps/flutter/lib/src/bridge/generated/api.dart"
+rm -f "$ROOT_DIR/apps/flutter/lib/src/bridge/generated/bridge_generated.dart"
+rm -f "$ROOT_DIR/apps/flutter/rust/generated/frb_generated.h"
 flutter_rust_bridge_codegen generate
 
 echo "flutter_rust_bridge bindings generated."
