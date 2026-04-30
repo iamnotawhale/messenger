@@ -63,6 +63,20 @@ The server currently exposes a health endpoint:
 curl http://127.0.0.1:8080/health
 ```
 
+Relay API skeleton:
+
+```text
+POST /v1/auth/challenge
+POST /v1/auth/verify
+POST /v1/relay/envelopes
+GET  /v1/relay/envelopes/pending
+POST /v1/relay/envelopes/{message_id}/delivered
+```
+
+Auth is a signed challenge flow. The server stores session tokens and relay
+queues in memory for now, which keeps the contract testable before adding
+SQLite persistence.
+
 ## Security direction
 
 The current crypto crate provides an MVP sealed-message primitive:

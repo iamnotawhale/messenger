@@ -112,6 +112,90 @@ pub enum DeliveryPolicy {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PublicIdentityDocument {
+    pub peer_id: PeerId,
+    pub signing_key: [u8; 32],
+    pub agreement_key: [u8; 32],
+}
+
+impl PublicIdentityDocument {
+    pub fn validate_peer_id(&self) -> Result<(), ProtocolError> {
+        let expected = PeerId::from_public_identity(&self.signing_key, &self.agreement_key);
+        if expected == self.peer_id {
+            Ok(())
+        } else {
+            Err(ProtocolError::PeerIdentityMismatch)
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AuthChallengeRequest {
+    pub peer_id: PeerId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AuthChallenge {
+    pub challenge_id: String,
+    pub peer_id: PeerId,
+    pub nonce: String,
+    pub expires_at_ms: u64,
+}
+
+impl AuthChallenge {
+    pub fn signing_bytes(&self) -> Vec<u8> {
+        [
+            b"messenger/auth-challenge/v1".as_slice(),
+            self.challenge_id.as_bytes(),
+            self.peer_id.as_bytes(),
+            self.nonce.as_bytes(),
+            &self.expires_at_ms.to_be_bytes(),
+        ]
+        .concat()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AuthVerifyRequest {
+    pub identity: PublicIdentityDocument,
+    pub challenge_id: String,
+    pub signature: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AuthVerifyResponse {
+    pub peer_id: PeerId,
+    pub session_token: String,
+    pub expires_at_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SubmitEnvelopeRequest {
+    pub envelope: Envelope,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SubmitEnvelopeResponse {
+    pub message_id: MessageId,
+    pub accepted: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingEnvelopesResponse {
+    pub envelopes: Vec<Envelope>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MarkDeliveredRequest {
+    pub message_id: MessageId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MarkDeliveredResponse {
+    pub removed: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub conversation_id: String,
     pub body: String,
@@ -228,6 +312,8 @@ impl EnvelopeHeader {
 pub enum ProtocolError {
     #[error("invalid peer id")]
     InvalidPeerId,
+    #[error("public identity does not match peer id")]
+    PeerIdentityMismatch,
     #[error("invalid encrypted envelope")]
     InvalidEnvelope,
     #[error("unsupported protocol version: {0}")]
@@ -257,5 +343,19 @@ mod tests {
         envelope.payload.ciphertext = vec![3];
 
         assert_ne!(before, envelope.signing_bytes());
+    }
+
+    #[test]
+    fn auth_challenge_signing_bytes_include_peer_and_nonce() {
+        let challenge = AuthChallenge {
+            challenge_id: "challenge-1".to_owned(),
+            peer_id: PeerId::new("peer:aaaaaaaaaaaaaaaa").unwrap(),
+            nonce: "nonce-1".to_owned(),
+            expires_at_ms: 42,
+        };
+        let mut changed = challenge.clone();
+        changed.nonce = "nonce-2".to_owned();
+
+        assert_ne!(challenge.signing_bytes(), changed.signing_bytes());
     }
 }

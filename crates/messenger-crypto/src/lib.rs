@@ -10,7 +10,8 @@ use chacha20poly1305::{
 };
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use messenger_protocol::{
-    CipherPayload, Envelope, PayloadKind, PeerId, PlainMessage, ProtocolError, PROTOCOL_VERSION,
+    AuthChallenge, CipherPayload, Envelope, PayloadKind, PeerId, PlainMessage, ProtocolError,
+    PROTOCOL_VERSION,
 };
 use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,13 @@ impl IdentityKeypair {
 
     pub fn agreement_public_key(&self) -> X25519PublicKey {
         X25519PublicKey::from(&self.agreement_secret)
+    }
+
+    pub fn sign_auth_challenge(&self, challenge: &AuthChallenge) -> Vec<u8> {
+        self.signing_key
+            .sign(&challenge.signing_bytes())
+            .to_bytes()
+            .to_vec()
     }
 
     pub fn encrypt_for(
@@ -164,6 +172,19 @@ pub fn verify_envelope_signature(
         Signature::from_slice(&envelope.signature).map_err(|_| CryptoError::InvalidSignature)?;
     verifying_key
         .verify(&signature_message(envelope), &signature)
+        .map_err(|_| CryptoError::InvalidSignature)
+}
+
+pub fn verify_auth_challenge(
+    sender: &PublicIdentity,
+    challenge: &AuthChallenge,
+    signature: &[u8],
+) -> Result<(), CryptoError> {
+    let verifying_key = VerifyingKey::from_bytes(&sender.signing_key)
+        .map_err(|_| CryptoError::InvalidPublicKeyLength)?;
+    let signature = Signature::from_slice(signature).map_err(|_| CryptoError::InvalidSignature)?;
+    verifying_key
+        .verify(&challenge.signing_bytes(), &signature)
         .map_err(|_| CryptoError::InvalidSignature)
 }
 
@@ -254,6 +275,38 @@ mod tests {
         envelope.payload.ciphertext[0] ^= 1;
 
         let result = bob.decrypt_from(&alice.public_identity(), &envelope);
+        assert!(matches!(result, Err(CryptoError::InvalidSignature)));
+    }
+
+    #[test]
+    fn auth_challenge_signature_verifies() {
+        let alice = IdentityKeypair::generate();
+        let challenge = AuthChallenge {
+            challenge_id: "challenge-1".to_owned(),
+            peer_id: alice.peer_id(),
+            nonce: "nonce".to_owned(),
+            expires_at_ms: 1,
+        };
+        let signature = alice.sign_auth_challenge(&challenge);
+
+        verify_auth_challenge(&alice.public_identity(), &challenge, &signature).unwrap();
+    }
+
+    #[test]
+    fn auth_challenge_signature_rejects_wrong_challenge() {
+        let alice = IdentityKeypair::generate();
+        let challenge = AuthChallenge {
+            challenge_id: "challenge-1".to_owned(),
+            peer_id: alice.peer_id(),
+            nonce: "nonce".to_owned(),
+            expires_at_ms: 1,
+        };
+        let mut other = challenge.clone();
+        other.nonce = "other".to_owned();
+        let signature = alice.sign_auth_challenge(&challenge);
+
+        let result = verify_auth_challenge(&alice.public_identity(), &other, &signature);
+
         assert!(matches!(result, Err(CryptoError::InvalidSignature)));
     }
 }

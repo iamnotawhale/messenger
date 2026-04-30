@@ -5,7 +5,12 @@ edition = "2021"
 
 [dependencies]
 axum = "0.8.9"
+messenger-crypto = { version = "0.1.0", path = "../../crates/messenger-crypto" }
 messenger-protocol = { version = "0.1.0", path = "../../crates/messenger-protocol" }
+rand_core = { version = "0.6", features = ["getrandom"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.5.3", features = ["util"] }
 tracing-subscriber = "0.3.23"
+uuid = { version = "=1.10.0", features = ["v4", "serde"] }

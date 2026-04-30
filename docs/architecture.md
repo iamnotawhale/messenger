@@ -38,6 +38,18 @@ Rust server
 
 The server is not trusted with plaintext. It stores encrypted envelopes and minimal routing metadata.
 
+Current relay API:
+
+```text
+POST /v1/auth/challenge
+POST /v1/auth/verify
+POST /v1/relay/envelopes
+GET  /v1/relay/envelopes/pending
+POST /v1/relay/envelopes/{message_id}/delivered
+```
+
+Authentication is challenge based. A client requests a challenge for its `PeerId`, signs the challenge with its Ed25519 identity key, then receives a bearer session token. Relay endpoints require that token and only accept envelopes whose sender matches the authenticated peer.
+
 ## Identity
 
 - Long-term identity is based on an Ed25519 signing key.
@@ -52,6 +64,8 @@ The server is not trusted with plaintext. It stores encrypted envelopes and mini
 3. Transport layer attempts direct WebRTC delivery when the recipient is online.
 4. Relay is used when direct delivery is unavailable or the recipient is offline.
 5. Receiver verifies the signature, decrypts the payload, deduplicates by message id, and persists the result locally.
+
+The initial server queue is in-memory. This keeps the first executable relay small while preserving an API shape that can move to SQLite or PostgreSQL.
 
 ## Storage
 

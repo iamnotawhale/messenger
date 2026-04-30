@@ -461,6 +461,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 name = "messenger-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "messenger-crypto",
  "messenger-protocol",
  "messenger-storage",
@@ -496,10 +497,15 @@ name = "messenger-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "messenger-crypto",
  "messenger-protocol",
+ "rand_core",
  "serde",
+ "serde_json",
  "tokio",
+ "tower",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
