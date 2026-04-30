@@ -80,10 +80,32 @@ GET  /v1/relay/envelopes/pending
 POST /v1/relay/envelopes/{message_id}/delivered
 ```
 
-Auth is a signed challenge flow. The server stores session tokens and relay
-queues in memory by default for local development. Set `MESSENGER_SQLITE_URL`
-to a SQLite connection string, for example `sqlite://messenger.db?mode=rwc`, to
+Auth is a signed challenge flow. The server stores session tokens in memory and
+relay queues in memory by default for local development. Set
+`MESSENGER_SQLITE_PATH`, for example `MESSENGER_SQLITE_PATH=./relay.db`, to
 persist relay envelopes across server restarts.
+
+## Dev CLI
+
+The `messenger-dev` tool exercises the relay flow without the Flutter client:
+
+```bash
+cargo run -p messenger-dev -- identity new alice.json
+cargo run -p messenger-dev -- identity new bob.json
+cargo run -p messenger-dev -- identity public alice.json alice.public.json
+cargo run -p messenger-dev -- identity public bob.json bob.public.json
+
+cargo run -p messenger-dev -- send \
+  --server http://127.0.0.1:8080 \
+  --from alice.json \
+  --to bob.public.json \
+  --text "hello"
+
+cargo run -p messenger-dev -- receive \
+  --server http://127.0.0.1:8080 \
+  --identity bob.json \
+  --from alice.public.json
+```
 
 ## Security direction
 

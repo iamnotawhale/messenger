@@ -5,6 +5,7 @@ members = [
     "crates/messenger-protocol",
     "crates/messenger-storage",
     "server/messenger-server",
+    "tools/messenger-dev",
 ]
 resolver = "2"
 

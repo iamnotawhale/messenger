@@ -23,6 +23,8 @@ const NONCE_LEN: usize = 24;
 pub enum CryptoError {
     #[error("invalid public key length")]
     InvalidPublicKeyLength,
+    #[error("invalid private key length")]
+    InvalidPrivateKeyLength,
     #[error("invalid signature")]
     InvalidSignature,
     #[error("encryption failed")]
@@ -54,6 +56,12 @@ impl PublicIdentity {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PrivateIdentity {
+    pub signing_key: [u8; 32],
+    pub agreement_secret: [u8; 32],
+}
+
 #[derive(Clone)]
 pub struct IdentityKeypair {
     signing_key: SigningKey,
@@ -65,6 +73,20 @@ impl IdentityKeypair {
         Self {
             signing_key: SigningKey::generate(&mut OsRng),
             agreement_secret: StaticSecret::random_from_rng(OsRng),
+        }
+    }
+
+    pub fn from_private_identity(identity: PrivateIdentity) -> Self {
+        Self {
+            signing_key: SigningKey::from_bytes(&identity.signing_key),
+            agreement_secret: StaticSecret::from(identity.agreement_secret),
+        }
+    }
+
+    pub fn private_identity(&self) -> PrivateIdentity {
+        PrivateIdentity {
+            signing_key: self.signing_key.to_bytes(),
+            agreement_secret: self.agreement_secret.to_bytes(),
         }
     }
 
