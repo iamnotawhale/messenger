@@ -18,11 +18,13 @@ lib/
   src/
     bridge/
       messenger_bridge.dart
+      rust_messenger_bridge.dart
+      generated/
     models/
     screens/
     state/
 ```
 
-`MessengerBridge` is currently an interface. A later Flutter setup pass should
-generate concrete bindings from `crates/messenger-ffi` and implement that
-interface with Rust calls.
+`MessengerBridge` is the app-facing interface. `RustMessengerBridge` is prepared
+to call generated `flutter_rust_bridge` bindings once `flutter_rust_bridge.yaml`
+is generated in an environment with Flutter/Dart installed.

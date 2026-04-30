@@ -5,6 +5,9 @@ version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [dependencies]
 messenger-client = { version = "0.1.0", path = "../messenger-client" }
 messenger-client-store = { version = "0.1.0", path = "../messenger-client-store" }
