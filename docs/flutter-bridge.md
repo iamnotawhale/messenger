@@ -26,10 +26,12 @@ URL, and delegates to `messenger-client`.
 `apps/flutter` contains a minimal app shell:
 
 - `MessengerBridge` defines the Dart-side bridge contract.
-- `MockMessengerBridge` is the default app bridge so the UI can run before
+- `MockMessengerBridge` is the demo/test fallback so the UI can run before
   generated native bindings exist.
 - `RustMessengerBridge` adapts generated `flutter_rust_bridge` calls to
   `MessengerBridge` once codegen is available.
+- `createMessengerBridge` uses generated Rust bindings when
+  `MESSENGER_USE_RUST_BRIDGE=true`; otherwise it uses the mock bridge.
 - `MessengerController` owns UI state and calls bridge methods.
 - `HomeScreen` provides onboarding, public identity export, contact add, send,
   sync, and message list flows.
@@ -56,7 +58,17 @@ When the Flutter SDK and `flutter_rust_bridge` are available:
 2. From the repository root, run `scripts/generate-flutter-bridge.sh`.
 3. Run `flutter pub get`, `flutter analyze`, and `flutter test` in
    `apps/flutter`.
-4. Replace the mock bridge in `main.dart` with `RustMessengerBridge`.
+4. Run the app with generated bindings enabled:
+
+```bash
+flutter run --dart-define=MESSENGER_USE_RUST_BRIDGE=true
+```
+
+Or run mock/demo mode with:
+
+```bash
+flutter run --dart-define=MESSENGER_USE_MOCK_BRIDGE=true
+```
 
 The generation script checks for `flutter`, `dart`, and
 `flutter_rust_bridge_codegen` before running codegen.
