@@ -1,3 +1,5 @@
+pub mod api;
+
 use messenger_client::{ClientError, MessengerClient};
 use messenger_client_store::{ClientStoreError, ContactRecord, MessageDirection, MessageRecord};
 use messenger_crypto::PublicIdentity;

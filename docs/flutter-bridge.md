@@ -31,11 +31,26 @@ URL, and delegates to `messenger-client`.
 - `HomeScreen` provides onboarding, public identity export, contact add, send,
   sync, and message list flows.
 
+## flutter_rust_bridge scaffold
+
+The repository now includes `flutter_rust_bridge.yaml`, pointing codegen at:
+
+- Rust input: `crates/messenger-ffi/src/api.rs`
+- Dart output: `apps/flutter/lib/src/bridge/generated/api.dart`
+- C output: `apps/flutter/rust/generated/frb_generated.h`
+
+`apps/flutter/lib/src/bridge/rust_messenger_bridge.dart` is the adapter that
+will wrap generated functions and satisfy the app's `MessengerBridge` interface.
+
+Generated binding files are intentionally not checked in yet because this cloud
+image does not include Flutter/Dart tooling.
+
 ## Next integration step
 
 When the Flutter SDK and `flutter_rust_bridge` are available:
 
-1. Generate Dart bindings for `messenger-ffi`.
-2. Implement `MessengerBridge` with generated Rust calls.
-3. Add platform-specific secure storage for DB path and app lock settings.
-4. Replace the mock bridge in `main.dart` with the generated bridge.
+1. Install the generator: `cargo install flutter_rust_bridge_codegen`.
+2. From the repository root, run `flutter_rust_bridge_codegen generate`.
+3. Run `flutter pub get`, `flutter analyze`, and `flutter test` in
+   `apps/flutter`.
+4. Replace the mock bridge in `main.dart` with `RustMessengerBridge`.
