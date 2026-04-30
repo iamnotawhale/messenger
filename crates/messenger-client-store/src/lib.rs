@@ -91,9 +91,9 @@ impl ClientStore {
 
     pub fn save_identity(&self, identity: &PrivateIdentity, peer_id: &PeerId) -> Result<()> {
         self.connection.execute(
-            "INSERT OR REPLACE INTO identities (peer_id, private_identity_json, created_at_ms)
-             VALUES (?1, ?2, COALESCE(
-                (SELECT created_at_ms FROM identities WHERE peer_id = ?1),
+            "INSERT OR REPLACE INTO identities (slot, peer_id, private_identity_json, created_at_ms)
+             VALUES ('local', ?1, ?2, COALESCE(
+                (SELECT created_at_ms FROM identities WHERE slot = 'local'),
                 ?3
              ))",
             params![
@@ -110,8 +110,7 @@ impl ClientStore {
             .query_row(
                 "SELECT peer_id, private_identity_json
                  FROM identities
-                 ORDER BY created_at_ms ASC
-                 LIMIT 1",
+                 WHERE slot = 'local'",
                 [],
                 |row| {
                     let peer_id: String = row.get(0)?;
@@ -320,7 +319,8 @@ impl ClientStore {
     fn migrate(&self) -> Result<()> {
         self.connection.execute_batch(
             "CREATE TABLE IF NOT EXISTS identities (
-                peer_id TEXT PRIMARY KEY,
+                slot TEXT PRIMARY KEY,
+                peer_id TEXT NOT NULL,
                 private_identity_json TEXT NOT NULL,
                 created_at_ms INTEGER NOT NULL
             );

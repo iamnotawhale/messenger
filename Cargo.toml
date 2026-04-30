@@ -1,7 +1,7 @@
 [workspace]
 members = [ "crates/messenger-client", "crates/messenger-client-store",
     "crates/messenger-core",
-    "crates/messenger-crypto",
+    "crates/messenger-crypto", "crates/messenger-ffi",
     "crates/messenger-protocol",
     "crates/messenger-storage", "crates/messenger-transport",
     "server/messenger-server",
