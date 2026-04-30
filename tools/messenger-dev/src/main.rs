@@ -1,16 +1,7 @@
 use messenger_crypto::{IdentityKeypair, PrivateIdentity, PublicIdentity};
-use messenger_protocol::{
-    AuthChallenge, AuthChallengeRequest, AuthVerifyRequest, AuthVerifyResponse, Envelope,
-    MarkDeliveredResponse, PendingEnvelopesResponse, PublicIdentityDocument, SubmitEnvelopeRequest,
-    SubmitEnvelopeResponse,
-};
+use messenger_transport::{RelayHttpClient, TransportError};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{
-    env, fs,
-    io::{Read, Write},
-    net::TcpStream,
-    path::Path,
-};
+use std::{env, fs, path::Path};
 use thiserror::Error;
 
 const DEFAULT_SERVER: &str = "http://127.0.0.1:8080";
@@ -25,8 +16,8 @@ enum CliError {
     Json(#[from] serde_json::Error),
     #[error("crypto error: {0}")]
     Crypto(#[from] messenger_crypto::CryptoError),
-    #[error("http error: {0}")]
-    Http(String),
+    #[error("transport error: {0}")]
+    Transport(#[from] TransportError),
 }
 
 type Result<T> = std::result::Result<T, CliError>;
@@ -104,15 +95,10 @@ fn send(args: &[String]) -> Result<()> {
     let text = required_option(args, "--text")?;
     let sender = load_identity(from_path)?;
     let recipient = load_public_identity(to_path)?;
-    let session = authenticate(server, &sender)?;
+    let client = RelayHttpClient::new(server)?;
+    let session = client.authenticate(&sender)?;
     let envelope = sender.encrypt_for(&recipient, text.as_bytes())?;
-    let response: SubmitEnvelopeResponse = http_json(
-        server,
-        "POST",
-        "/v1/relay/envelopes",
-        Some(&session),
-        &SubmitEnvelopeRequest { envelope },
-    )?;
+    let response = client.submit(&session, envelope)?;
 
     println!(
         "submitted message {} accepted={}",
@@ -127,19 +113,18 @@ fn receive(args: &[String]) -> Result<()> {
     let from_path = required_option(args, "--from")?;
     let recipient = load_identity(identity_path)?;
     let sender = load_public_identity(from_path)?;
-    let session = authenticate(server, &recipient)?;
-    let pending: PendingEnvelopesResponse =
-        http_empty(server, "GET", "/v1/relay/envelopes/pending", Some(&session))?;
+    let client = RelayHttpClient::new(server)?;
+    let session = client.authenticate(&recipient)?;
+    let pending = client.pending(&session)?;
 
-    if pending.envelopes.is_empty() {
+    if pending.is_empty() {
         println!("no pending messages");
         return Ok(());
     }
 
-    for envelope in pending.envelopes {
+    for envelope in pending {
         print_message(&recipient, &sender, &envelope)?;
-        let path = format!("/v1/relay/envelopes/{}/delivered", envelope.message_id);
-        let delivered: MarkDeliveredResponse = http_empty(server, "POST", &path, Some(&session))?;
+        let delivered = client.mark_delivered(&session, envelope.message_id)?;
         println!(
             "marked {} delivered removed={}",
             envelope.message_id, delivered.removed
@@ -149,44 +134,10 @@ fn receive(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn authenticate(server: &str, identity: &IdentityKeypair) -> Result<String> {
-    let challenge: AuthChallenge = http_json(
-        server,
-        "POST",
-        "/v1/auth/challenge",
-        None,
-        &AuthChallengeRequest {
-            peer_id: identity.peer_id(),
-        },
-    )?;
-    let response: AuthVerifyResponse = http_json(
-        server,
-        "POST",
-        "/v1/auth/verify",
-        None,
-        &AuthVerifyRequest {
-            identity: public_identity_document(identity),
-            challenge_id: challenge.challenge_id.clone(),
-            signature: identity.sign_auth_challenge(&challenge),
-        },
-    )?;
-
-    Ok(response.session_token)
-}
-
-fn public_identity_document(identity: &IdentityKeypair) -> PublicIdentityDocument {
-    let public = identity.public_identity();
-    PublicIdentityDocument {
-        peer_id: public.peer_id,
-        signing_key: public.signing_key,
-        agreement_key: public.agreement_key,
-    }
-}
-
 fn print_message(
     recipient: &IdentityKeypair,
     sender: &PublicIdentity,
-    envelope: &Envelope,
+    envelope: &messenger_protocol::Envelope,
 ) -> Result<()> {
     let plaintext = recipient.decrypt_from(sender, envelope)?;
     println!(
@@ -219,127 +170,6 @@ fn write_json<T: Serialize>(path: &str, value: &T) -> Result<()> {
     }
     fs::write(path, serde_json::to_vec_pretty(value)?)?;
     Ok(())
-}
-
-fn http_json<TRequest, TResponse>(
-    server: &str,
-    method: &str,
-    path: &str,
-    bearer_token: Option<&str>,
-    payload: &TRequest,
-) -> Result<TResponse>
-where
-    TRequest: Serialize,
-    TResponse: DeserializeOwned,
-{
-    http_request(
-        server,
-        method,
-        path,
-        bearer_token,
-        Some(serde_json::to_vec(payload)?),
-    )
-}
-
-fn http_empty<TResponse>(
-    server: &str,
-    method: &str,
-    path: &str,
-    bearer_token: Option<&str>,
-) -> Result<TResponse>
-where
-    TResponse: DeserializeOwned,
-{
-    http_request(server, method, path, bearer_token, None)
-}
-
-fn http_request<TResponse>(
-    server: &str,
-    method: &str,
-    path: &str,
-    bearer_token: Option<&str>,
-    body: Option<Vec<u8>>,
-) -> Result<TResponse>
-where
-    TResponse: DeserializeOwned,
-{
-    let endpoint = parse_http_url(server)?;
-    let body = body.unwrap_or_default();
-    let mut stream = TcpStream::connect((&endpoint.host[..], endpoint.port))?;
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nContent-Length: {}\r\n",
-        endpoint.host,
-        body.len()
-    );
-
-    if !body.is_empty() {
-        request.push_str("Content-Type: application/json\r\n");
-    }
-
-    if let Some(token) = bearer_token {
-        request.push_str(&format!("Authorization: Bearer {token}\r\n"));
-    }
-
-    request.push_str("\r\n");
-    stream.write_all(request.as_bytes())?;
-    stream.write_all(&body)?;
-
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response)?;
-    let (status, body) = parse_http_response(&response)?;
-    if !(200..300).contains(&status) {
-        return Err(CliError::Http(format!(
-            "server returned HTTP {status}: {}",
-            String::from_utf8_lossy(body)
-        )));
-    }
-
-    Ok(serde_json::from_slice(body)?)
-}
-
-#[derive(Debug)]
-struct HttpEndpoint {
-    host: String,
-    port: u16,
-}
-
-fn parse_http_url(server: &str) -> Result<HttpEndpoint> {
-    let without_scheme = server
-        .strip_prefix("http://")
-        .ok_or_else(|| CliError::Usage("only http:// relay URLs are supported".to_owned()))?;
-    let host_port = without_scheme.trim_end_matches('/');
-    let (host, port) = match host_port.rsplit_once(':') {
-        Some((host, port)) => (
-            host.to_owned(),
-            port.parse::<u16>()
-                .map_err(|_| CliError::Usage("invalid relay port".to_owned()))?,
-        ),
-        None => (host_port.to_owned(), 80),
-    };
-    Ok(HttpEndpoint { host, port })
-}
-
-fn parse_http_response(response: &[u8]) -> Result<(u16, &[u8])> {
-    let separator = b"\r\n\r\n";
-    let header_end = response
-        .windows(separator.len())
-        .position(|window| window == separator)
-        .ok_or_else(|| CliError::Http("malformed HTTP response".to_owned()))?;
-    let headers = &response[..header_end];
-    let body = &response[header_end + separator.len()..];
-    let status_line_end = headers
-        .windows(2)
-        .position(|window| window == b"\r\n")
-        .unwrap_or(headers.len());
-    let status_line = std::str::from_utf8(&headers[..status_line_end])
-        .map_err(|_| CliError::Http("invalid HTTP status line".to_owned()))?;
-    let status = status_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or_else(|| CliError::Http("missing HTTP status".to_owned()))?
-        .parse::<u16>()
-        .map_err(|_| CliError::Http("invalid HTTP status".to_owned()))?;
-    Ok((status, body))
 }
 
 fn option_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {

@@ -1,0 +1,16 @@
+[package]
+name = "messenger-transport"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+messenger-crypto = { version = "0.1.0", path = "../messenger-crypto" }
+messenger-protocol = { version = "0.1.0", path = "../messenger-protocol" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "2.0.18"
+
+[lints]
+workspace = true

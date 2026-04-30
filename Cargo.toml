@@ -3,7 +3,7 @@ members = [
     "crates/messenger-core",
     "crates/messenger-crypto",
     "crates/messenger-protocol",
-    "crates/messenger-storage",
+    "crates/messenger-storage", "crates/messenger-transport",
     "server/messenger-server",
     "tools/messenger-dev",
 ]
