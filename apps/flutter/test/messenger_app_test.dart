@@ -3,7 +3,7 @@ import 'package:messenger_app/src/app.dart';
 
 void main() {
   testWidgets('renders the mock-backed messenger shell', (tester) async {
-    await tester.pumpWidget(const MessengerApp());
+    await tester.pumpWidget(MessengerApp());
     await tester.pump();
 
     expect(find.text('Messenger'), findsOneWidget);
