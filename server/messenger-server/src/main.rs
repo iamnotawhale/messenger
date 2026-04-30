@@ -50,8 +50,19 @@ struct ErrorResponse {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let state = AppState::default();
-    let app = Router::new()
+    let app = build_router(AppState::default());
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+        .await
+        .unwrap_or_else(|error| panic!("failed to bind server: {error}"));
+
+    axum::serve(listener, app)
+        .await
+        .unwrap_or_else(|error| panic!("server failed: {error}"));
+}
+
+fn build_router(state: AppState) -> Router {
+    Router::new()
         .route("/health", get(health))
         .route("/v1/auth/challenge", post(create_challenge))
         .route("/v1/auth/verify", post(verify_challenge))
@@ -62,15 +73,7 @@ async fn main() {
             post(mark_delivered),
         )
         .route("/v1/signaling", get(signaling_placeholder))
-        .with_state(state);
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
-        .await
-        .unwrap_or_else(|error| panic!("failed to bind server: {error}"));
-
-    axum::serve(listener, app)
-        .await
-        .unwrap_or_else(|error| panic!("server failed: {error}"));
+        .with_state(state)
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -272,4 +275,165 @@ fn hex_encode(bytes: &[u8]) -> String {
         encoded.push(HEX[(byte & 0x0f) as usize] as char);
     }
     encoded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{to_bytes, Body},
+        http::{header, request::Builder, Method, Request},
+    };
+    use messenger_crypto::IdentityKeypair;
+    use messenger_protocol::{
+        AuthChallengeRequest, AuthVerifyRequest, AuthVerifyResponse, MarkDeliveredResponse,
+        PendingEnvelopesResponse, PublicIdentityDocument, SubmitEnvelopeRequest,
+        SubmitEnvelopeResponse,
+    };
+    use serde::{de::DeserializeOwned, Serialize};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn relay_delivers_encrypted_envelope_end_to_end() {
+        let app = build_router(AppState::default());
+        let alice = IdentityKeypair::generate();
+        let bob = IdentityKeypair::generate();
+
+        let alice_session = authenticate_peer(app.clone(), &alice).await;
+        let bob_session = authenticate_peer(app.clone(), &bob).await;
+        let plaintext = b"hello through relay";
+        let envelope = alice
+            .encrypt_for(&bob.public_identity(), plaintext)
+            .unwrap();
+        let message_id = envelope.message_id;
+
+        let submit: SubmitEnvelopeResponse = request_json(
+            app.clone(),
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/relay/envelopes")
+                .header(header::AUTHORIZATION, bearer(&alice_session)),
+            &SubmitEnvelopeRequest { envelope },
+        )
+        .await;
+        assert!(submit.accepted);
+        assert_eq!(submit.message_id, message_id);
+
+        let pending: PendingEnvelopesResponse = request_empty(
+            app.clone(),
+            Request::builder()
+                .method(Method::GET)
+                .uri("/v1/relay/envelopes/pending")
+                .header(header::AUTHORIZATION, bearer(&bob_session)),
+        )
+        .await;
+        assert_eq!(pending.envelopes.len(), 1);
+
+        let decrypted = bob
+            .decrypt_from(&alice.public_identity(), &pending.envelopes[0])
+            .unwrap();
+        assert_eq!(decrypted, plaintext);
+
+        let delivered: MarkDeliveredResponse = request_empty(
+            app.clone(),
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!(
+                    "/v1/relay/envelopes/{}/delivered",
+                    message_id.as_uuid()
+                ))
+                .header(header::AUTHORIZATION, bearer(&bob_session)),
+        )
+        .await;
+        assert!(delivered.removed);
+
+        let after_delivery: PendingEnvelopesResponse = request_empty(
+            app,
+            Request::builder()
+                .method(Method::GET)
+                .uri("/v1/relay/envelopes/pending")
+                .header(header::AUTHORIZATION, bearer(&bob_session)),
+        )
+        .await;
+        assert!(after_delivery.envelopes.is_empty());
+    }
+
+    async fn authenticate_peer(app: Router, identity: &IdentityKeypair) -> String {
+        let challenge: AuthChallenge = request_json(
+            app.clone(),
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/auth/challenge"),
+            &AuthChallengeRequest {
+                peer_id: identity.peer_id(),
+            },
+        )
+        .await;
+        let response: AuthVerifyResponse = request_json(
+            app,
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/auth/verify"),
+            &AuthVerifyRequest {
+                identity: public_identity_document(identity),
+                challenge_id: challenge.challenge_id.clone(),
+                signature: identity.sign_auth_challenge(&challenge),
+            },
+        )
+        .await;
+
+        assert_eq!(response.peer_id, identity.peer_id());
+        response.session_token
+    }
+
+    fn public_identity_document(identity: &IdentityKeypair) -> PublicIdentityDocument {
+        let public = identity.public_identity();
+        PublicIdentityDocument {
+            peer_id: public.peer_id,
+            signing_key: public.signing_key,
+            agreement_key: public.agreement_key,
+        }
+    }
+
+    async fn request_json<TRequest, TResponse>(
+        app: Router,
+        builder: Builder,
+        payload: &TRequest,
+    ) -> TResponse
+    where
+        TRequest: Serialize,
+        TResponse: DeserializeOwned,
+    {
+        let request = builder
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(payload).unwrap()))
+            .unwrap();
+        send(app, request).await
+    }
+
+    async fn request_empty<TResponse>(app: Router, builder: Builder) -> TResponse
+    where
+        TResponse: DeserializeOwned,
+    {
+        let request = builder.body(Body::empty()).unwrap();
+        send(app, request).await
+    }
+
+    async fn send<TResponse>(app: Router, request: Request<Body>) -> TResponse
+    where
+        TResponse: DeserializeOwned,
+    {
+        let response = app.oneshot(request).await.unwrap();
+        assert!(
+            response.status().is_success(),
+            "unexpected response status: {}",
+            response.status()
+        );
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    fn bearer(token: &str) -> String {
+        format!("Bearer {token}")
+    }
 }
