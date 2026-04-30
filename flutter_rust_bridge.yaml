@@ -1,4 +1,4 @@
-rust_input: crates/messenger-ffi/src/api.rs
+rust_input: crate::api
 dart_output: apps/flutter/lib/src/bridge/generated/api.dart
 c_output: apps/flutter/rust/generated/frb_generated.h
 rust_root: crates/messenger-ffi
