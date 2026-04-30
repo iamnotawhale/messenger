@@ -6,4 +6,7 @@ Expected files after running codegen:
 - `bridge_generated.dart`
 - any platform-specific loader files required by the selected generator version
 
-Do not hand-edit generated Dart files.
+`api.dart` is currently a placeholder so Flutter analyze/test can run before
+codegen. `flutter_rust_bridge_codegen generate` is expected to overwrite it.
+
+Do not hand-edit generated Dart files beyond placeholder maintenance.
