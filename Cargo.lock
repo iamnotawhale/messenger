@@ -542,6 +542,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "messenger-dev"
+version = "0.1.0"
+dependencies = [
+ "messenger-crypto",
+ "messenger-protocol",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "messenger-protocol"
 version = "0.1.0"
 dependencies = [
