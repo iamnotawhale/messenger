@@ -171,6 +171,14 @@ impl MessengerClient {
     pub fn outbox(&self) -> Result<Vec<OutboxRecord>> {
         Ok(self.store.outbox()?)
     }
+
+    pub fn messages_for_contact(&self, contact_name: &str) -> Result<Vec<MessageRecord>> {
+        let contact = self
+            .store
+            .contact_by_name(contact_name)?
+            .ok_or_else(|| ClientError::UnknownContact(contact_name.to_owned()))?;
+        Ok(self.store.messages_for_peer(&contact.peer_id)?)
+    }
 }
 
 fn now_ms() -> u64 {

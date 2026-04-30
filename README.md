@@ -107,6 +107,20 @@ cargo run -p messenger-dev -- receive \
   --from alice.public.json
 ```
 
+The CLI also has a database-backed workflow that is closer to the future app:
+
+```bash
+cargo run -p messenger-dev -- db init --db alice.db
+cargo run -p messenger-dev -- db init --db bob.db
+cargo run -p messenger-dev -- db public --db alice.db --out alice.public.json
+cargo run -p messenger-dev -- db public --db bob.db --out bob.public.json
+cargo run -p messenger-dev -- contact add --db alice.db --name Bob --public bob.public.json
+cargo run -p messenger-dev -- contact add --db bob.db --name Alice --public alice.public.json
+cargo run -p messenger-dev -- message send --db alice.db --to Bob --text "hello"
+cargo run -p messenger-dev -- sync --db bob.db
+cargo run -p messenger-dev -- messages list --db bob.db --contact Alice
+```
+
 For a full local smoke test that starts the server, creates temporary Alice/Bob
 identities, sends an encrypted message, receives it, and verifies that Bob's
 queue is empty after delivery:
