@@ -49,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final controller = widget.controller;
     final contacts = controller.contacts;
     final selectedContact = _selectedContact;
-    final messages = selectedContact == null ? const [] : controller.messagesFor(selectedContact);
+    final messages = selectedContact == null ? const [] : controller.messages;
 
     return Scaffold(
       appBar: AppBar(
@@ -87,8 +87,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 FilledButton(
                   onPressed: () async {
                     await controller.addContact(
-                      _contactNameController.text,
-                      _publicIdentityController.text,
+                      name: _contactNameController.text,
+                      publicIdentityJson: _publicIdentityController.text,
                     );
                     _contactNameController.clear();
                     _publicIdentityController.clear();
@@ -102,7 +102,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     selected: contact.name == selectedContact,
                     title: Text(contact.name),
                     subtitle: Text(contact.peerId),
-                    onTap: () => setState(() => _selectedContact = contact.name),
+                    onTap: () async {
+                      setState(() => _selectedContact = contact.name);
+                      await controller.selectContact(contact.name);
+                    },
                   ),
               ],
             ),
@@ -145,10 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: selectedContact == null
                             ? null
                             : () async {
-                                await controller.sendMessage(
-                                  selectedContact,
-                                  _messageController.text,
-                                );
+                                await controller.sendMessage(_messageController.text);
                                 _messageController.clear();
                               },
                         child: const Text('Send'),
