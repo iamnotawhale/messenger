@@ -1,0 +1,17 @@
+[package]
+name = "messenger-ffi"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+messenger-client = { version = "0.1.0", path = "../messenger-client" }
+messenger-client-store = { version = "0.1.0", path = "../messenger-client-store" }
+messenger-crypto = { version = "0.1.0", path = "../messenger-crypto" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "2.0.18"
+
+[lints]
+workspace = true

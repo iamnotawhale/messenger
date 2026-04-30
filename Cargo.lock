@@ -580,6 +580,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "messenger-ffi"
+version = "0.1.0"
+dependencies = [
+ "messenger-client",
+ "messenger-client-store",
+ "messenger-crypto",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "messenger-protocol"
 version = "0.1.0"
 dependencies = [
