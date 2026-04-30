@@ -57,3 +57,6 @@ When the Flutter SDK and `flutter_rust_bridge` are available:
 
 The generation script checks for `flutter`, `dart`, and
 `flutter_rust_bridge_codegen` before running codegen.
+
+CI runs the same generation script in a GitHub-hosted environment with Flutter
+installed, then runs `flutter analyze` and `flutter test` for `apps/flutter`.

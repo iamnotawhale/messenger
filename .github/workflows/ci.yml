@@ -36,3 +36,41 @@ jobs:
 
       - name: Run relay smoke test
         run: scripts/dev-relay-smoke.sh
+
+  flutter:
+    name: Flutter bridge and app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install native bridge dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libclang-dev llvm-dev ninja-build
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install flutter_rust_bridge generator
+        run: cargo install flutter_rust_bridge_codegen
+
+      - name: Generate Flutter/Rust bridge
+        run: scripts/generate-flutter-bridge.sh
+
+      - name: Analyze Flutter app
+        working-directory: apps/flutter
+        run: flutter analyze
+
+      - name: Test Flutter app
+        working-directory: apps/flutter
+        run: flutter test
