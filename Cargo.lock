@@ -517,6 +517,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "messenger-client"
+version = "0.1.0"
+dependencies = [
+ "messenger-client-store",
+ "messenger-crypto",
+ "messenger-protocol",
+ "messenger-transport",
+ "thiserror",
+]
+
+[[package]]
+name = "messenger-client-store"
+version = "0.1.0"
+dependencies = [
+ "messenger-crypto",
+ "messenger-protocol",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "messenger-core"
 version = "0.1.0"
 dependencies = [
@@ -545,6 +569,8 @@ dependencies = [
 name = "messenger-dev"
 version = "0.1.0"
 dependencies = [
+ "messenger-client",
+ "messenger-client-store",
  "messenger-crypto",
  "messenger-protocol",
  "messenger-transport",

@@ -6,6 +6,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+messenger-client = { version = "0.1.0", path = "../../crates/messenger-client" }
+messenger-client-store = { version = "0.1.0", path = "../../crates/messenger-client-store" }
 messenger-crypto = { version = "0.1.0", path = "../../crates/messenger-crypto" }
 messenger-protocol = { version = "0.1.0", path = "../../crates/messenger-protocol" }
 messenger-transport = { version = "0.1.0", path = "../../crates/messenger-transport" }

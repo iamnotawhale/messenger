@@ -1,0 +1,16 @@
+[package]
+name = "messenger-client"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+messenger-client-store = { version = "0.1.0", path = "../messenger-client-store" }
+messenger-crypto = { version = "0.1.0", path = "../messenger-crypto" }
+messenger-protocol = { version = "0.1.0", path = "../messenger-protocol" }
+messenger-transport = { version = "0.1.0", path = "../messenger-transport" }
+thiserror = "2.0.18"
+
+[lints]
+workspace = true

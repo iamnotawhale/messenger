@@ -1,3 +1,5 @@
+use messenger_client::{ClientError, MessengerClient};
+use messenger_client_store::{ClientStoreError, MessageDirection};
 use messenger_crypto::{IdentityKeypair, PrivateIdentity, PublicIdentity};
 use messenger_transport::{RelayHttpClient, TransportError};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -18,6 +20,10 @@ enum CliError {
     Crypto(#[from] messenger_crypto::CryptoError),
     #[error("transport error: {0}")]
     Transport(#[from] TransportError),
+    #[error("client error: {0}")]
+    Client(#[from] ClientError),
+    #[error("client store error: {0}")]
+    ClientStore(#[from] ClientStoreError),
 }
 
 type Result<T> = std::result::Result<T, CliError>;
@@ -57,6 +63,25 @@ fn run() -> Result<()> {
             if command == "identity" && subcommand == "public" =>
         {
             identity_public(private_path, public_path)
+        }
+        [command, subcommand, rest @ ..] if command == "db" && subcommand == "init" => {
+            db_init(rest)
+        }
+        [command, subcommand, rest @ ..] if command == "db" && subcommand == "public" => {
+            db_public(rest)
+        }
+        [command, subcommand, rest @ ..] if command == "contact" && subcommand == "add" => {
+            contact_add(rest)
+        }
+        [command, subcommand, rest @ ..] if command == "contact" && subcommand == "list" => {
+            contact_list(rest)
+        }
+        [command, subcommand, rest @ ..] if command == "message" && subcommand == "send" => {
+            message_send(rest)
+        }
+        [command, rest @ ..] if command == "sync" => sync(rest),
+        [command, subcommand, rest @ ..] if command == "messages" && subcommand == "list" => {
+            messages_list(rest)
         }
         [command, rest @ ..] if command == "send" => send(rest),
         [command, rest @ ..] if command == "receive" => receive(rest),
@@ -134,6 +159,117 @@ fn receive(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn db_init(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let peer_id = client.init_identity()?;
+    println!("initialized client db for {peer_id}");
+    Ok(())
+}
+
+fn db_public(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let output = required_option(args, "--out")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let identity = client.identity()?;
+    write_json(
+        output,
+        &PublicIdentityFile {
+            identity: identity.public_identity(),
+        },
+    )?;
+    println!("wrote public identity {}", identity.peer_id());
+    Ok(())
+}
+
+fn contact_add(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let name = required_option(args, "--name")?;
+    let public_path = required_option(args, "--public")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let public_identity = load_public_identity(public_path)?;
+    client.add_contact(name, &public_identity)?;
+    println!("added contact {name} ({})", public_identity.peer_id);
+    Ok(())
+}
+
+fn contact_list(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let contacts = client.store().contacts()?;
+    if contacts.is_empty() {
+        println!("no contacts");
+        return Ok(());
+    }
+
+    for contact in contacts {
+        println!("{} {}", contact.display_name, contact.peer_id);
+    }
+    Ok(())
+}
+
+fn message_send(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let to = required_option(args, "--to")?;
+    let text = required_option(args, "--text")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let sent = client.send_message(to, text)?;
+    println!(
+        "sent message {} accepted={}",
+        sent.message_id, sent.accepted
+    );
+    Ok(())
+}
+
+fn sync(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let messages = client.sync_pending()?;
+    if messages.is_empty() {
+        println!("no pending messages");
+        return Ok(());
+    }
+
+    for message in messages {
+        println!(
+            "{} from {}: {}",
+            message.message_id, message.sender, message.body
+        );
+    }
+    Ok(())
+}
+
+fn messages_list(args: &[String]) -> Result<()> {
+    let database = required_option(args, "--db")?;
+    let contact = required_option(args, "--contact")?;
+    let server = option_value(args, "--server").unwrap_or(DEFAULT_SERVER);
+    let client = MessengerClient::open(database, server)?;
+    let contact = client
+        .store()
+        .contact_by_name(contact)?
+        .ok_or_else(|| CliError::Usage("unknown contact".to_owned()))?;
+    let messages = client.store().messages_for_peer(&contact.peer_id)?;
+    if messages.is_empty() {
+        println!("no messages");
+        return Ok(());
+    }
+
+    for message in messages {
+        let direction = match message.direction {
+            MessageDirection::Inbound => "in",
+            MessageDirection::Outbound => "out",
+        };
+        println!("[{direction}] {}: {}", message.message_id, message.body);
+    }
+    Ok(())
+}
+
 fn print_message(
     recipient: &IdentityKeypair,
     sender: &PublicIdentity,
@@ -186,6 +322,13 @@ fn usage() -> String {
     [
         "messenger-dev identity new <identity.json>",
         "messenger-dev identity public <identity.json> <public.json>",
+        "messenger-dev db init --db <client.db> [--server <url>]",
+        "messenger-dev db public --db <client.db> --out <public.json> [--server <url>]",
+        "messenger-dev contact add --db <client.db> --name <name> --public <public.json> [--server <url>]",
+        "messenger-dev contact list --db <client.db> [--server <url>]",
+        "messenger-dev message send --db <client.db> --to <name> --text <message> [--server <url>]",
+        "messenger-dev sync --db <client.db> [--server <url>]",
+        "messenger-dev messages list --db <client.db> --contact <name> [--server <url>]",
         "messenger-dev send --server <url> --from <identity.json> --to <public.json> --text <message>",
         "messenger-dev receive --server <url> --identity <identity.json> --from <public.json>",
     ]
