@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -11,12 +12,14 @@ use messenger_protocol::{
     SubmitEnvelopeResponse, TransportKind, PROTOCOL_VERSION,
 };
 use rand_core::{OsRng, RngCore};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error;
 use uuid::Uuid;
 
 const AUTH_HEADER: &str = "authorization";
@@ -29,11 +32,11 @@ struct HealthResponse {
     transports: [TransportKind; 2],
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct AppState {
     challenges: Arc<Mutex<HashMap<String, PendingChallenge>>>,
     sessions: Arc<Mutex<HashMap<String, PublicIdentity>>>,
-    queues: Arc<Mutex<HashMap<String, Vec<Envelope>>>>,
+    relay_store: Arc<dyn RelayStore>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,11 +49,208 @@ struct ErrorResponse {
     error: &'static str,
 }
 
+#[derive(Debug, Error)]
+enum RelayStoreError {
+    #[error("database error: {0}")]
+    Database(#[from] rusqlite::Error),
+    #[error("store lock poisoned")]
+    LockPoisoned,
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+}
+
+#[async_trait]
+trait RelayStore: Send + Sync {
+    async fn enqueue(&self, envelope: Envelope) -> Result<(), RelayStoreError>;
+
+    async fn pending_for(&self, recipient: &str) -> Result<Vec<Envelope>, RelayStoreError>;
+
+    async fn mark_delivered(
+        &self,
+        recipient: &str,
+        message_id: Uuid,
+    ) -> Result<bool, RelayStoreError>;
+}
+
+#[derive(Default)]
+struct MemoryRelayStore {
+    queues: Mutex<HashMap<String, Vec<Envelope>>>,
+}
+
+#[async_trait]
+impl RelayStore for MemoryRelayStore {
+    async fn enqueue(&self, envelope: Envelope) -> Result<(), RelayStoreError> {
+        let recipient = envelope.recipient.as_str().to_owned();
+        self.queues
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?
+            .entry(recipient)
+            .or_default()
+            .push(envelope);
+        Ok(())
+    }
+
+    async fn pending_for(&self, recipient: &str) -> Result<Vec<Envelope>, RelayStoreError> {
+        Ok(self
+            .queues
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?
+            .get(recipient)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn mark_delivered(
+        &self,
+        recipient: &str,
+        message_id: Uuid,
+    ) -> Result<bool, RelayStoreError> {
+        let mut queues = self
+            .queues
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?;
+        let queue = queues.entry(recipient.to_owned()).or_default();
+        let before = queue.len();
+        queue.retain(|envelope| envelope.message_id.as_uuid() != message_id);
+        Ok(before != queue.len())
+    }
+}
+
+#[derive(Clone)]
+struct SqliteRelayStore {
+    connection: Arc<Mutex<Connection>>,
+}
+
+impl SqliteRelayStore {
+    fn connect(database_path: &str) -> Result<Self, RelayStoreError> {
+        let connection = Connection::open(database_path)?;
+        let store = Self {
+            connection: Arc::new(Mutex::new(connection)),
+        };
+        store.migrate()?;
+        Ok(store)
+    }
+
+    fn migrate(&self) -> Result<(), RelayStoreError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?;
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS relay_envelopes (
+                message_id TEXT NOT NULL,
+                recipient_peer_id TEXT NOT NULL,
+                envelope_json TEXT NOT NULL,
+                created_at_ms INTEGER NOT NULL,
+                PRIMARY KEY (recipient_peer_id, message_id)
+            )",
+            [],
+        )?;
+
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_relay_envelopes_recipient_created
+                ON relay_envelopes (recipient_peer_id, created_at_ms)",
+            [],
+        )?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl RelayStore for SqliteRelayStore {
+    async fn enqueue(&self, envelope: Envelope) -> Result<(), RelayStoreError> {
+        let envelope_json = serde_json::to_string(&envelope)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?;
+        connection.execute(
+            "INSERT OR IGNORE INTO relay_envelopes
+                (message_id, recipient_peer_id, envelope_json, created_at_ms)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                envelope.message_id.to_string(),
+                envelope.recipient.as_str(),
+                envelope_json,
+                envelope.created_at_ms as i64
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    async fn pending_for(&self, recipient: &str) -> Result<Vec<Envelope>, RelayStoreError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?;
+        let mut statement = connection.prepare(
+            "SELECT envelope_json
+             FROM relay_envelopes
+             WHERE recipient_peer_id = ?1
+             ORDER BY created_at_ms ASC, message_id ASC",
+        )?;
+        let rows = statement.query_map(params![recipient], |row| row.get::<_, String>(0))?;
+
+        rows.map(|row| {
+            let json = row?;
+            serde_json::from_str(&json).map_err(RelayStoreError::from)
+        })
+        .collect()
+    }
+
+    async fn mark_delivered(
+        &self,
+        recipient: &str,
+        message_id: Uuid,
+    ) -> Result<bool, RelayStoreError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| RelayStoreError::LockPoisoned)?;
+        let rows_affected = connection.execute(
+            "DELETE FROM relay_envelopes
+             WHERE recipient_peer_id = ?1 AND message_id = ?2",
+            params![recipient, message_id.to_string()],
+        )?;
+
+        Ok(rows_affected > 0)
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            challenges: Arc::new(Mutex::new(HashMap::new())),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            relay_store: Arc::new(MemoryRelayStore::default()),
+        }
+    }
+}
+
+impl AppState {
+    fn with_relay_store(relay_store: Arc<dyn RelayStore>) -> Self {
+        Self {
+            relay_store,
+            ..Self::default()
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let app = build_router(AppState::default());
+    let state = match std::env::var("MESSENGER_SQLITE_PATH") {
+        Ok(database_path) => {
+            let relay_store = SqliteRelayStore::connect(&database_path)
+                .unwrap_or_else(|error| panic!("failed to initialize sqlite relay store: {error}"));
+            AppState::with_relay_store(Arc::new(relay_store))
+        }
+        Err(_) => AppState::default(),
+    };
+    let app = build_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
@@ -169,14 +369,11 @@ async fn submit_envelope(
     }
 
     let message_id = request.envelope.message_id;
-    let recipient = request.envelope.recipient.as_str().to_owned();
     state
-        .queues
-        .lock()
-        .map_err(|_| internal_error())?
-        .entry(recipient)
-        .or_default()
-        .push(request.envelope);
+        .relay_store
+        .enqueue(request.envelope)
+        .await
+        .map_err(|_| internal_error())?;
 
     Ok(Json(SubmitEnvelopeResponse {
         message_id,
@@ -190,12 +387,10 @@ async fn pending_envelopes(
 ) -> Result<Json<PendingEnvelopesResponse>, (StatusCode, Json<ErrorResponse>)> {
     let identity = authenticate(&state, &headers)?;
     let envelopes = state
-        .queues
-        .lock()
-        .map_err(|_| internal_error())?
-        .get(identity.peer_id.as_str())
-        .cloned()
-        .unwrap_or_default();
+        .relay_store
+        .pending_for(identity.peer_id.as_str())
+        .await
+        .map_err(|_| internal_error())?;
 
     Ok(Json(PendingEnvelopesResponse { envelopes }))
 }
@@ -206,16 +401,13 @@ async fn mark_delivered(
     Path(message_id): Path<Uuid>,
 ) -> Result<Json<MarkDeliveredResponse>, (StatusCode, Json<ErrorResponse>)> {
     let identity = authenticate(&state, &headers)?;
-    let mut queues = state.queues.lock().map_err(|_| internal_error())?;
-    let queue = queues
-        .entry(identity.peer_id.as_str().to_owned())
-        .or_default();
-    let before = queue.len();
-    queue.retain(|envelope| envelope.message_id.as_uuid() != message_id);
+    let removed = state
+        .relay_store
+        .mark_delivered(identity.peer_id.as_str(), message_id)
+        .await
+        .map_err(|_| internal_error())?;
 
-    Ok(Json(MarkDeliveredResponse {
-        removed: before != queue.len(),
-    }))
+    Ok(Json(MarkDeliveredResponse { removed }))
 }
 
 fn authenticate(
@@ -356,6 +548,69 @@ mod tests {
         )
         .await;
         assert!(after_delivery.envelopes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sqlite_relay_store_persists_pending_envelopes_across_router_restarts() {
+        let database_path =
+            std::env::temp_dir().join(format!("messenger-relay-{}.sqlite", Uuid::new_v4()));
+        let database_path = database_path.to_string_lossy().into_owned();
+        let alice = IdentityKeypair::generate();
+        let bob = IdentityKeypair::generate();
+        let plaintext = b"persistent relay message";
+        let envelope = alice
+            .encrypt_for(&bob.public_identity(), plaintext)
+            .unwrap();
+
+        let first_app = sqlite_app(&database_path);
+        let alice_session = authenticate_peer(first_app.clone(), &alice).await;
+        let submit: SubmitEnvelopeResponse = request_json(
+            first_app,
+            Request::builder()
+                .method(Method::POST)
+                .uri("/v1/relay/envelopes")
+                .header(header::AUTHORIZATION, bearer(&alice_session)),
+            &SubmitEnvelopeRequest { envelope },
+        )
+        .await;
+        assert!(submit.accepted);
+
+        let restarted_app = sqlite_app(&database_path);
+        let bob_session = authenticate_peer(restarted_app.clone(), &bob).await;
+        let pending: PendingEnvelopesResponse = request_empty(
+            restarted_app.clone(),
+            Request::builder()
+                .method(Method::GET)
+                .uri("/v1/relay/envelopes/pending")
+                .header(header::AUTHORIZATION, bearer(&bob_session)),
+        )
+        .await;
+
+        assert_eq!(pending.envelopes.len(), 1);
+        let decrypted = bob
+            .decrypt_from(&alice.public_identity(), &pending.envelopes[0])
+            .unwrap();
+        assert_eq!(decrypted, plaintext);
+
+        let delivered: MarkDeliveredResponse = request_empty(
+            restarted_app,
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!(
+                    "/v1/relay/envelopes/{}/delivered",
+                    pending.envelopes[0].message_id.as_uuid()
+                ))
+                .header(header::AUTHORIZATION, bearer(&bob_session)),
+        )
+        .await;
+        assert!(delivered.removed);
+
+        let _ = std::fs::remove_file(database_path);
+    }
+
+    fn sqlite_app(database_path: &str) -> Router {
+        let store = SqliteRelayStore::connect(database_path).unwrap();
+        build_router(AppState::with_relay_store(Arc::new(store)))
     }
 
     async fn authenticate_peer(app: Router, identity: &IdentityKeypair) -> String {

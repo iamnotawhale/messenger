@@ -57,6 +57,13 @@ cargo test --workspace
 cargo run -p messenger-server
 ```
 
+By default the relay queue is in memory. Set `MESSENGER_SQLITE_PATH` to persist
+encrypted relay envelopes across restarts:
+
+```bash
+MESSENGER_SQLITE_PATH=./relay.db cargo run -p messenger-server
+```
+
 The server currently exposes a health endpoint:
 
 ```bash
@@ -74,8 +81,9 @@ POST /v1/relay/envelopes/{message_id}/delivered
 ```
 
 Auth is a signed challenge flow. The server stores session tokens and relay
-queues in memory for now, which keeps the contract testable before adding
-SQLite persistence.
+queues in memory by default for local development. Set `MESSENGER_SQLITE_URL`
+to a SQLite connection string, for example `sqlite://messenger.db?mode=rwc`, to
+persist relay envelopes across server restarts.
 
 ## Security direction
 
