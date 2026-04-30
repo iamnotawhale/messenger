@@ -107,6 +107,14 @@ cargo run -p messenger-dev -- receive \
   --from alice.public.json
 ```
 
+For a full local smoke test that starts the server, creates temporary Alice/Bob
+identities, sends an encrypted message, receives it, and verifies that Bob's
+queue is empty after delivery:
+
+```bash
+scripts/dev-relay-smoke.sh
+```
+
 ## Security direction
 
 The current crypto crate provides an MVP sealed-message primitive:
