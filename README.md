@@ -75,6 +75,12 @@ encrypted relay envelopes across restarts:
 MESSENGER_SQLITE_PATH=./relay.db cargo run -p messenger-server
 ```
 
+Set `MESSENGER_BIND_ADDR` to change the listen address:
+
+```bash
+MESSENGER_BIND_ADDR=127.0.0.1:18080 cargo run -p messenger-server
+```
+
 The server currently exposes a health endpoint:
 
 ```bash
@@ -138,6 +144,12 @@ queue is empty after delivery:
 
 ```bash
 scripts/dev-relay-smoke.sh
+```
+
+For the database-backed client workflow, run:
+
+```bash
+scripts/dev-db-smoke.sh
 ```
 
 Generate Flutter/Rust bridge bindings in an environment with Flutter, Dart, and
