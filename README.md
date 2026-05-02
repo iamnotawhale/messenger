@@ -159,6 +159,27 @@ Generate Flutter/Rust bridge bindings in an environment with Flutter, Dart, and
 scripts/generate-flutter-bridge.sh
 ```
 
+Bootstrap Flutter desktop and Android platform folders in an environment with
+Flutter installed:
+
+```bash
+scripts/bootstrap-flutter-platforms.sh
+```
+
+Run the polished mock UI on desktop:
+
+```bash
+cd apps/flutter
+flutter run -d linux --dart-define=MESSENGER_USE_MOCK_BRIDGE=true
+```
+
+Run the Android mock UI:
+
+```bash
+cd apps/flutter
+flutter run -d android --dart-define=MESSENGER_USE_MOCK_BRIDGE=true
+```
+
 ## Security direction
 
 The current crypto crate provides an MVP sealed-message primitive:

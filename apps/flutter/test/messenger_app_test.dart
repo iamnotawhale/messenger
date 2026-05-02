@@ -7,7 +7,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Messenger'), findsOneWidget);
-    expect(find.text('Peer ID'), findsOneWidget);
-    expect(find.text('Add contact'), findsOneWidget);
+    expect(find.text('Secure peer-to-peer relay messenger'), findsOneWidget);
+    expect(find.text('Add secure contact'), findsOneWidget);
   });
 }

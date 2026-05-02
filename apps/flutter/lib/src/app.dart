@@ -4,6 +4,7 @@ import 'bridge/messenger_bridge.dart';
 import 'bridge/mock_messenger_bridge.dart';
 import 'screens/home_screen.dart';
 import 'state/messenger_controller.dart';
+import 'theme/app_theme.dart';
 
 class MessengerApp extends StatelessWidget {
   MessengerApp({super.key, MessengerBridge? bridge})
@@ -23,10 +24,7 @@ class MessengerApp extends StatelessWidget {
 
     return MaterialApp(
       title: 'Messenger',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      theme: buildAppTheme(),
       home: HomeScreen(controller: controller),
     );
   }
