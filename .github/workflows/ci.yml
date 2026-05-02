@@ -37,6 +37,9 @@ jobs:
       - name: Run relay smoke test
         run: scripts/dev-relay-smoke.sh
 
+      - name: Run DB-backed client smoke test
+        run: scripts/dev-db-smoke.sh
+
   flutter:
     name: Flutter bridge and app
     runs-on: ubuntu-latest

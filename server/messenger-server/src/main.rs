@@ -252,9 +252,11 @@ async fn main() {
     };
     let app = build_router(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
+    let bind_addr =
+        std::env::var("MESSENGER_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
-        .unwrap_or_else(|error| panic!("failed to bind server: {error}"));
+        .unwrap_or_else(|error| panic!("failed to bind server at {bind_addr}: {error}"));
 
     axum::serve(listener, app)
         .await
