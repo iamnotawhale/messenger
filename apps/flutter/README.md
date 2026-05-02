@@ -35,6 +35,19 @@ lib/
 - generated mode uses `RustMessengerBridge` once `flutter_rust_bridge` bindings
   are available and `MESSENGER_USE_RUST_BRIDGE=true` is set.
 
+Bootstrap desktop and Android platform directories in an environment with the
+Flutter SDK:
+
+```bash
+scripts/bootstrap-flutter-platforms.sh
+```
+
+Run the polished mock/demo shell:
+
+```bash
+flutter run --dart-define=MESSENGER_USE_MOCK_BRIDGE=true
+```
+
 After running bridge generation, launch with generated Rust bindings enabled:
 
 ```bash
